@@ -42,7 +42,7 @@ const Footer = () => {
             <h3 className="font-semibold text-gray-800 mb-3">Contact</h3>
             <ul className="space-y-2">
               <li className="text-sm text-gray-600">contact@paarbloodconnect.com</li>
-              <li className="text-sm text-gray-600">+1 (800) BLOOD-HELP</li>
+              <li className="text-sm text-gray-600">+91 (7986904164) BLOOD-HELP</li>
               <li className="text-sm text-gray-600">123 Donation Street, City</li>
               <li className="text-sm text-gray-600">Available 24/7 for emergencies</li>
             </ul>
@@ -50,7 +50,7 @@ const Footer = () => {
         </div>
         
         <div className="border-t mt-8 pt-6 flex flex-col md:flex-row justify-between items-center">
-          <p className="text-sm text-gray-600 mb-4 md:mb-0">
+          <p className="text-sm text-gray-600 mb-4 md:mb-0
             &copy; {new Date().getFullYear()} PaAr BloodConnect. All rights reserved.
           </p>
           <div className="flex items-center text-sm text-gray-600">

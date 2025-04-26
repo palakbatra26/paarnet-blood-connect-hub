@@ -1,6 +1,4 @@
-
 import { useState } from "react";
-import { useData } from "@/context/DataContext";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,14 +6,41 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
+
+interface FormData {
+  name: string;
+  email: string;
+  phone: string;
+  bloodType: string;
+  age: string;
+  lastDonation: string;
+  address: string;
+  hasMedicalConditions: boolean;
+  medicalConditions: string;
+  agreeToTerms: boolean;
+  password: string;
+  confirmPassword: string;
+}
+
+interface FormErrors {
+  name: string;
+  email: string;
+  phone: string;
+  bloodType: string;
+  age: string;
+  agreeToTerms: string;
+  password: string;
+  confirmPassword: string;
+  address: string;
+}
 
 const DonorRegistration = () => {
-  const { addDonor } = useData();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, token } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     email: "",
     phone: "",
@@ -26,79 +51,173 @@ const DonorRegistration = () => {
     hasMedicalConditions: false,
     medicalConditions: "",
     agreeToTerms: false,
+    password: "",
+    confirmPassword: ""
   });
 
-  const [errors, setErrors] = useState({
+  const [errors, setErrors] = useState<FormErrors>({
     name: "",
     email: "",
     phone: "",
     bloodType: "",
     age: "",
     agreeToTerms: "",
+    password: "",
+    confirmPassword: "",
+    address: ""
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    // Clear error when user types
-    if (errors[name as keyof typeof errors]) {
-      setErrors({ ...errors, [name]: "" });
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name as keyof FormErrors]) {
+      setErrors(prev => ({ ...prev, [name]: "" }));
     }
   };
 
   const handleCheckboxChange = (name: string, checked: boolean) => {
-    setFormData({ ...formData, [name]: checked });
-    // Clear error for terms
+    setFormData(prev => ({ ...prev, [name]: checked }));
     if (name === "agreeToTerms" && errors.agreeToTerms) {
-      setErrors({ ...errors, agreeToTerms: "" });
+      setErrors(prev => ({ ...prev, agreeToTerms: "" }));
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {
+  const validateForm = (): boolean => {
+    const newErrors: FormErrors = {
       name: formData.name ? "" : "Name is required",
       email: /^\S+@\S+\.\S+$/.test(formData.email) ? "" : "Valid email is required",
       phone: /^[0-9+\-\s]{10,15}$/.test(formData.phone) ? "" : "Valid phone number is required",
       bloodType: formData.bloodType ? "" : "Blood type is required",
       age: parseInt(formData.age) >= 18 ? "" : "You must be at least 18 years old",
       agreeToTerms: formData.agreeToTerms ? "" : "You must agree to the terms",
+      password: formData.password.length >= 6 ? "" : "Password must be at least 6 characters",
+      confirmPassword: formData.password === formData.confirmPassword ? "" : "Passwords do not match",
+      address: formData.address ? "" : "Address is required"
     };
 
     setErrors(newErrors);
     return !Object.values(newErrors).some(error => error);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Reset errors
+    setErrors({});
+    const newErrors: FormErrors = {};
 
-    if (!validateForm()) {
+    // Validate required fields
+    if (!formData.name?.trim()) {
+      newErrors.name = 'Name is required';
+    }
+    if (!formData.email?.trim()) {
+      newErrors.email = 'Email is required';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = 'Invalid email format';
+      }
+    }
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    if (!formData.phone?.trim()) {
+      newErrors.phone = 'Phone number is required';
+    }
+    if (!formData.bloodType) {
+      newErrors.bloodType = 'Blood type is required';
+    }
+    if (!formData.age) {
+      newErrors.age = 'Age is required';
+    } else {
+      const age = parseInt(formData.age);
+      if (isNaN(age) || age < 18 || age > 65) {
+        newErrors.age = 'Age must be between 18 and 65';
+      }
+    }
+    if (!formData.address?.trim()) {
+      newErrors.address = 'Address is required';
+    }
+    if (!formData.agreeToTerms) {
+      newErrors.agreeToTerms = 'You must accept the terms and conditions';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields correctly',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
       return;
     }
 
-    // Process medical conditions
-    const medicalConditionsList = formData.hasMedicalConditions && formData.medicalConditions
-      ? formData.medicalConditions.split(',').map(item => item.trim())
-      : [];
+    try {
+      console.log('Sending registration data:', {
+        ...formData,
+        email: formData.email?.toLowerCase().trim(),
+        name: formData.name?.trim(),
+        phone: formData.phone?.trim(),
+        address: formData.address?.trim(),
+      });
 
-    // Add donor to database
-    addDonor({
-      name: formData.name,
-      email: formData.email,
-      phone: formData.phone,
-      bloodType: formData.bloodType,
-      age: parseInt(formData.age),
-      lastDonation: formData.lastDonation || null,
-      medicalConditions: medicalConditionsList,
-    });
+      const response = await axios.post('http://localhost:5001/api/auth/register', {
+        ...formData,
+        email: formData.email?.toLowerCase().trim(),
+        name: formData.name?.trim(),
+        phone: formData.phone?.trim(),
+        address: formData.address?.trim(),
+        medicalConditions: formData.medicalConditions.split(',').map(item => item.trim())
+      });
 
-    // Show success message
-    toast({
-      title: "Registration Successful!",
-      description: "Thank you for registering as a blood donor.",
-    });
+      console.log('Registration response:', response.data);
 
-    // Redirect to home page
-    navigate("/");
+      if (response.data.token) {
+        // Store the token
+        localStorage.setItem('token', response.data.token);
+        
+        toast({
+          title: 'Registration Successful',
+          description: 'Welcome to PaAr Blood! Your account is pending approval.',
+          status: 'success',
+          duration: 5000,
+          isClosable: true,
+        });
+
+        // Navigate to home page
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+
+      let errorMessage = 'Registration failed. Please try again.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      if (error.response?.data?.details) {
+        const details = error.response.data.details;
+        setErrors(details);
+      }
+
+      toast({
+        title: 'Registration Failed',
+        description: errorMessage,
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
   };
 
   // Blood type options
@@ -137,6 +256,7 @@ const DonorRegistration = () => {
                   />
                   {errors.name && <p className="text-sm text-blood-600">{errors.name}</p>}
                 </div>
+                
                 <div className="space-y-2">
                   <label htmlFor="email" className="text-sm font-medium">
                     Email <span className="text-blood-600">*</span>
@@ -155,6 +275,38 @@ const DonorRegistration = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <label htmlFor="password" className="text-sm font-medium">
+                    Password <span className="text-blood-600">*</span>
+                  </label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Create a password"
+                  />
+                  {errors.password && <p className="text-sm text-blood-600">{errors.password}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <label htmlFor="confirmPassword" className="text-sm font-medium">
+                    Confirm Password <span className="text-blood-600">*</span>
+                  </label>
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    placeholder="Confirm your password"
+                  />
+                  {errors.confirmPassword && <p className="text-sm text-blood-600">{errors.confirmPassword}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
                   <label htmlFor="phone" className="text-sm font-medium">
                     Phone Number <span className="text-blood-600">*</span>
                   </label>
@@ -167,6 +319,7 @@ const DonorRegistration = () => {
                   />
                   {errors.phone && <p className="text-sm text-blood-600">{errors.phone}</p>}
                 </div>
+                
                 <div className="space-y-2">
                   <label htmlFor="bloodType" className="text-sm font-medium">
                     Blood Type <span className="text-blood-600">*</span>
@@ -231,6 +384,7 @@ const DonorRegistration = () => {
                   onChange={handleChange}
                   placeholder="Your address"
                 />
+                {errors.address && <p className="text-sm text-blood-600">{errors.address}</p>}
               </div>
 
               <div className="space-y-2">
@@ -283,9 +437,8 @@ const DonorRegistration = () => {
               <Button 
                 type="submit" 
                 className="w-full bg-blood-600 hover:bg-blood-700"
-                disabled={!isAuthenticated}
               >
-                {isAuthenticated ? "Register as Donor" : "Login to Register"}
+                Register as Donor
               </Button>
             </CardFooter>
           </form>

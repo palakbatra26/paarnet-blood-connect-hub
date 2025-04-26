@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 interface BloodCamp {
@@ -19,6 +18,7 @@ interface UrgentRequest {
   contact: string;
   requiredUnits: number;
   createdAt: string;
+  status: string;
   isUrgent: boolean;
 }
 
@@ -86,6 +86,7 @@ const initialUrgentRequests: UrgentRequest[] = [
     contact: "+1-555-111-2222",
     requiredUnits: 3,
     createdAt: "2025-04-12T10:30:00",
+    status: "Pending",
     isUrgent: true,
   },
   {
@@ -96,6 +97,7 @@ const initialUrgentRequests: UrgentRequest[] = [
     contact: "+1-555-333-4444",
     requiredUnits: 2,
     createdAt: "2025-04-13T09:15:00",
+    status: "Pending",
     isUrgent: true,
   },
 ];

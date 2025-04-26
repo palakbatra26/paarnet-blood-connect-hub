@@ -1,17 +1,21 @@
-
 import React, { createContext, useContext, useState, ReactNode } from "react";
+import axios from "axios";
 
 interface User {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   role: "user" | "admin";
+  bloodType?: string;
+  phone?: string;
+  status?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  token: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -21,42 +25,67 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  // Mock functions - these would be replaced with actual API calls
   const login = async (email: string, password: string) => {
-    // For demo purposes - hardcoded admin login
-    if (email === "admin@example.com" && password === "admin123") {
-      setUser({
-        id: "admin-123",
-        name: "Admin User",
-        email: "admin@example.com",
-        role: "admin",
+    try {
+      const response = await axios.post('http://localhost:5000/api/auth/login', {
+        email,
+        password
       });
-      return;
+
+      const { token, user } = response.data;
+      setToken(token);
+      setUser(user);
+      localStorage.setItem('token', token);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Login failed');
     }
-    
-    // Regular user login
-    setUser({
-      id: "user-123",
-      name: "Test User",
-      email: email,
-      role: "user",
-    });
   };
 
   const logout = () => {
     setUser(null);
+    setToken(null);
+    localStorage.removeItem('token');
   };
 
   const register = async (name: string, email: string, password: string) => {
-    // For demo purposes - just set as a regular user
-    setUser({
-      id: "user-" + Date.now(),
-      name: name,
-      email: email,
-      role: "user",
-    });
+    try {
+      const response = await axios.post('http://localhost:5000/api/auth/register', {
+        name,
+        email,
+        password,
+        role: 'user'
+      });
+
+      const { token, user } = response.data;
+      setToken(token);
+      setUser(user);
+      localStorage.setItem('token', token);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Registration failed');
+    }
   };
+
+  // Check for existing token on mount
+  React.useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    if (storedToken) {
+      setToken(storedToken);
+      // Fetch user data using the token
+      axios.get('http://localhost:5000/api/auth/me', {
+        headers: { Authorization: `Bearer ${storedToken}` }
+      })
+        .then(response => {
+          setUser(response.data);
+        })
+        .catch(() => {
+          // If token is invalid, clear it
+          localStorage.removeItem('token');
+          setToken(null);
+        });
+    }
+  }, []);
 
   return (
     <AuthContext.Provider
@@ -64,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         user,
         isAuthenticated: !!user,
         isAdmin: user?.role === "admin",
+        token,
         login,
         logout,
         register,
